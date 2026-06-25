@@ -1,0 +1,2 @@
+"""KPI analytics agent service."""
+
