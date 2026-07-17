@@ -46,6 +46,25 @@ Additional structured endpoints:
 - `GET /health`
 - `POST /api/agent/query`
 
+### Dashboard (Power BI) context
+
+Both `POST /chat` and `POST /api/agent/query` accept a `page_context` payload describing what the
+user is looking at in the portal. To give the agent structural awareness of the current KPI
+dashboard, the frontend should include a `route` field set to the dashboard route slug:
+
+- `global-scale`, `ethiopia`, `liberia`, `malawi`, `sierra_leone`
+
+(`page`, `pathname`, or `path` — e.g. `/kpi-dashboard/malawi` — are also accepted; the last path
+segment is used.) On each request the backend resolves that slug through `DashboardContextService`
+(`app/services/dashboard_context.py`), which loads `app/data/dashboard_context.json` — a per-route
+summary of that dashboard's KPIs, theory-of-change levels, chart types, and filters. The resolved
+summary is attached to agent state at `state["context"]["dashboard_context"]` and passed to the
+Master Orchestrator and SQL Generator so they can bias schema search and SQL toward the country/KPIs
+the user is viewing. An unknown or absent route resolves to an empty summary (no behavior change).
+
+`app/data/dashboard_context.json` is sourced from the portal repo's KPI metadata; update it when the
+dashboards change.
+
 ## Tests
 
 ```bash
