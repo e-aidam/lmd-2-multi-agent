@@ -14,15 +14,17 @@ class FinalAnswerAgent:
         self.settings = settings
 
     async def synthesize(self, state: dict[str, Any]) -> str:
+        context = state.get("context") or {}
         payload = {
             "question": state.get("question"),
             "chat_history": state.get("chat_history", []),
-            "page_context": state.get("context", {}).get("page_context"),
+            "page_context": context.get("page_context") if isinstance(context, dict) else None,
             "needs_database": state.get("needs_database"),
             "route_reason": state.get("route_reason"),
             "sql_used": state.get("validated_sql"),
             "row_count": state.get("row_count"),
             "preview_markdown": state.get("preview_markdown"),
+            "chart_spec": state.get("chart_spec"),
             "assumptions": state.get("sql_assumptions", []),
             "query_error": state.get("query_error"),
         }
@@ -57,9 +59,22 @@ class FinalAnswerAgent:
         if sql_used:
             parts.append(f"\n## SQL Used\n\n```sql\n{sql_used}\n```")
 
-        preview = state.get("preview_markdown")
-        if preview:
-            parts.append(f"\n## Data Preview\n\n{preview}")
+        # When a chart is being shown, reference it with a short caption instead of
+        # repeating the full result table.
+        chart_spec = state.get("chart_spec")
+        if isinstance(chart_spec, dict) and chart_spec.get("chart_type"):
+            title = chart_spec.get("title") or "the query results"
+            chart_type = chart_spec.get("chart_type")
+            x_field = chart_spec.get("x_field")
+            y_field = chart_spec.get("y_field")
+            parts.append(
+                f"\n## Chart\n\nShowing a {chart_type} chart of {title} "
+                f"({y_field} by {x_field})."
+            )
+        else:
+            preview = state.get("preview_markdown")
+            if preview:
+                parts.append(f"\n## Data Preview\n\n{preview}")
 
         assumptions = state.get("sql_assumptions") or []
         if assumptions:

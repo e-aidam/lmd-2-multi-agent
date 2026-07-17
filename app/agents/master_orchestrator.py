@@ -36,6 +36,7 @@ class MasterOrchestratorAgent:
             )
             return {
                 "needs_database": bool(result.get("needs_database")),
+                "needs_visualization": bool(result.get("needs_visualization")),
                 "route_reason": str(result.get("route_reason") or "Routing decision produced by Master Orchestrator."),
                 "schema_search_terms": _clean_terms(result.get("schema_search_terms")),
             }
@@ -71,11 +72,14 @@ class MasterOrchestratorAgent:
         }
         no_db_markers = ("what is", "define", "explain", "how does", "help me understand")
         needs_database = any(marker in lowered for marker in db_markers) and not lowered.startswith(no_db_markers)
+        viz_markers = ("chart", "graph", "plot", "trend", "compare", "over time", "visualize", "visualise", "visualization")
+        needs_visualization = needs_database and any(marker in lowered for marker in viz_markers)
         terms = extract_search_terms(question)
         terms.extend(extract_search_terms(_stringify_context(page_context)))
         terms.extend(extract_search_terms(_stringify_context(dashboard_context or {})))
         return {
             "needs_database": needs_database,
+            "needs_visualization": needs_visualization,
             "route_reason": (
                 "The question appears to ask for KPI data from the warehouse."
                 if needs_database

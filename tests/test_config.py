@@ -31,6 +31,7 @@ def _clear_agent_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "BEDROCK_MODEL_SQL",
         "BEDROCK_MODEL_CORRECTOR",
         "BEDROCK_MODEL_FINAL",
+        "BEDROCK_MODEL_VISUALIZATION",
         "DB_URI",
         "DATABASE_URL_READER",
         "REDSHIFT_URI",
@@ -78,9 +79,10 @@ def test_sql_agents_default_to_fast_model_master_final_to_strong(monkeypatch: py
     # Master routing and final synthesis keep the stronger default.
     assert settings.bedrock_model_master == DEFAULT_STRONG_MODEL_ID
     assert settings.bedrock_model_final == DEFAULT_STRONG_MODEL_ID
-    # SQL generation and correction get the faster/cheaper Haiku default.
+    # SQL generation, correction, and visualization get the faster/cheaper Haiku default.
     assert settings.bedrock_model_sql == DEFAULT_FAST_MODEL_ID
     assert settings.bedrock_model_corrector == DEFAULT_FAST_MODEL_ID
+    assert settings.bedrock_model_visualization == DEFAULT_FAST_MODEL_ID
     # The two workloads must resolve to different models by default.
     assert settings.bedrock_model_sql != settings.bedrock_model_master
     assert settings.bedrock_model_corrector != settings.bedrock_model_final
