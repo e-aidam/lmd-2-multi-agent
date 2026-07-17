@@ -79,8 +79,10 @@ class FakeRedshift:
 class FakeMaster:
     def __init__(self, needs_database: bool) -> None:
         self.needs_database = needs_database
+        self.last_kwargs: dict[str, Any] = {}
 
-    async def route(self, **_: Any) -> dict[str, Any]:
+    async def route(self, **kwargs: Any) -> dict[str, Any]:
+        self.last_kwargs = kwargs
         return {
             "needs_database": self.needs_database,
             "route_reason": "route",
@@ -91,9 +93,11 @@ class FakeMaster:
 class FakeGenerator:
     def __init__(self) -> None:
         self.calls = 0
+        self.last_kwargs: dict[str, Any] = {}
 
-    async def generate(self, **_: Any) -> dict[str, Any]:
+    async def generate(self, **kwargs: Any) -> dict[str, Any]:
         self.calls += 1
+        self.last_kwargs = kwargs
         return {"sql": "SELECT id FROM public.metrics", "assumptions": ["test"], "confidence": "high"}
 
 
@@ -138,12 +142,15 @@ def build_graph(
     return KPIAnalyticsGraph(runtime), schema_cache, redshift, generator, corrector, memory
 
 
-def initial_state() -> dict[str, Any]:
+def initial_state(route: str | None = None) -> dict[str, Any]:
+    page_dict: dict[str, Any] = {"session_id": "s1"}
+    if route is not None:
+        page_dict["route"] = route
     return {
         "question": "How many metrics?",
         "user_id": "u1",
         "database": "kpi_data",
-        "context": {"page_context": {"dict": {"session_id": "s1"}, "xml": "<ctx />"}},
+        "context": {"page_context": {"dict": page_dict, "xml": "<ctx />"}},
         "retry_count": 0,
     }
 
@@ -191,6 +198,29 @@ def test_corrector_runs_only_when_retry_controller_allows_it() -> None:
     assert corrector.calls == 1
     assert schema_cache.force_refreshes == 1
     assert state["retry_count"] == 1
+
+
+def test_dashboard_context_attached_to_state_and_passed_to_sql_generator() -> None:
+    # The runtime uses the real DashboardContextService (default), which loads the checked-in
+    # fixture, so a request tagged with the Malawi route resolves the Malawi dashboard summary.
+    graph, _, _, generator, _, _ = build_graph(needs_database=True)
+
+    state = asyncio.run(graph.ainvoke(initial_state(route="malawi")))
+
+    attached = state["context"]["dashboard_context"]
+    assert attached["program"] == "Malawi"
+    assert attached["route"] == "malawi"
+    # The SQL generator received the same Malawi dashboard context in its payload.
+    assert generator.last_kwargs["dashboard_context"]["program"] == "Malawi"
+
+
+def test_unknown_dashboard_route_resolves_to_empty_context() -> None:
+    graph, _, _, generator, _, _ = build_graph(needs_database=True)
+
+    state = asyncio.run(graph.ainvoke(initial_state(route="not-a-dashboard")))
+
+    assert state["context"]["dashboard_context"] == {}
+    assert generator.last_kwargs["dashboard_context"] == {}
 
 
 def test_final_error_after_retry_exhaustion() -> None:

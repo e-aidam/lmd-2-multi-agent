@@ -19,12 +19,14 @@ class SQLGeneratorAgent:
         chat_history: list[dict[str, str]],
         schema_context: dict[str, Any],
         page_context: dict[str, Any],
+        dashboard_context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         payload = {
             "question": question,
             "chat_history": chat_history,
             "schema_context": schema_context,
             "page_context": page_context,
+            "dashboard_context": dashboard_context or {},
             "database_rules": {
                 "database": self.settings.redshift_database,
                 "schema": self.settings.redshift_schema,

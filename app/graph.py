@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from app.agents.final_answer import FinalAnswerAgent
@@ -11,6 +11,7 @@ from app.config import Settings, get_settings
 from app.models import AgentGraphResult
 from app.services.bedrock import BedrockService
 from app.services.chat_memory import ChatMemoryService
+from app.services.dashboard_context import DashboardContextService
 from app.services.redshift import RedshiftService, is_schema_error
 from app.services.result_formatter import format_query_result
 from app.services.retry_controller import RetryController
@@ -38,6 +39,7 @@ class AgentRuntime:
     sql_generator: SQLGeneratorAgent
     sql_corrector: SQLCorrectorAgent
     final_answer: FinalAnswerAgent
+    dashboard_context: DashboardContextService = field(default_factory=DashboardContextService)
 
 
 def build_runtime(settings: Settings | None = None) -> AgentRuntime:
@@ -62,6 +64,7 @@ def build_runtime(settings: Settings | None = None) -> AgentRuntime:
         sql_generator=SQLGeneratorAgent(bedrock, settings),
         sql_corrector=SQLCorrectorAgent(bedrock, settings),
         final_answer=FinalAnswerAgent(bedrock, settings),
+        dashboard_context=DashboardContextService(),
     )
 
 
@@ -186,6 +189,7 @@ class KPIAnalyticsGraph:
 
     async def derive_session_id(self, state: AgentState) -> dict[str, Any]:
         context = state.get("context", {})
+        context = context if isinstance(context, dict) else {}
         page_context = context.get("page_context", {}) if isinstance(context, dict) else {}
         page_context_dict = page_context.get("dict") if isinstance(page_context, dict) else None
         session_id = None
@@ -193,11 +197,17 @@ class KPIAnalyticsGraph:
             session_id = page_context_dict.get("session_id")
         database = state.get("database") or self.runtime.settings.redshift_database
         user_id = state.get("user_id") or "anonymous"
+        # Attach the structural dashboard summary for the current portal route (if any) so the
+        # orchestrator and SQL generator understand what the user is likely looking at.
+        dashboard_context = self.runtime.dashboard_context.resolve(
+            page_context if isinstance(page_context, dict) else {}
+        )
         return {
             "session_id": session_id or f"{database}:{user_id}",
             "database": database,
             "retry_count": int(state.get("retry_count", 0) or 0),
             "max_sql_retries": self.runtime.settings.max_sql_retries,
+            "context": {**context, "dashboard_context": dashboard_context},
         }
 
     async def save_user_message(self, state: AgentState) -> dict[str, Any]:
@@ -222,10 +232,12 @@ class KPIAnalyticsGraph:
     async def master_orchestrator(self, state: AgentState) -> dict[str, Any]:
         context = state.get("context", {})
         page_context = context.get("page_context", {}) if isinstance(context, dict) else {}
+        dashboard_context = context.get("dashboard_context", {}) if isinstance(context, dict) else {}
         result = await self.runtime.master_orchestrator.route(
             question=state.get("question", ""),
             chat_history=state.get("chat_history", []),
             page_context=page_context,
+            dashboard_context=dashboard_context,
         )
         return {
             "needs_database": bool(result.get("needs_database")),
@@ -272,11 +284,13 @@ class KPIAnalyticsGraph:
     async def sql_generator(self, state: AgentState) -> dict[str, Any]:
         context = state.get("context", {})
         page_context = context.get("page_context", {}) if isinstance(context, dict) else {}
+        dashboard_context = context.get("dashboard_context", {}) if isinstance(context, dict) else {}
         result = await self.runtime.sql_generator.generate(
             question=state.get("question", ""),
             chat_history=state.get("chat_history", []),
             schema_context=state.get("schema_context", {}),
             page_context=page_context,
+            dashboard_context=dashboard_context,
         )
         sql = result.get("sql", "")
         if not sql:
