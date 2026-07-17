@@ -19,11 +19,14 @@ class MasterOrchestratorAgent:
         question: str,
         chat_history: list[dict[str, str]],
         page_context: dict[str, Any],
+        dashboard_context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        dashboard_context = dashboard_context or {}
         payload = {
             "question": question,
             "chat_history": chat_history,
             "page_context": page_context,
+            "dashboard_context": dashboard_context,
         }
         try:
             result = await self.bedrock.generate_json(
@@ -33,14 +36,19 @@ class MasterOrchestratorAgent:
             )
             return {
                 "needs_database": bool(result.get("needs_database")),
+                "needs_visualization": bool(result.get("needs_visualization")),
                 "route_reason": str(result.get("route_reason") or "Routing decision produced by Master Orchestrator."),
                 "schema_search_terms": _clean_terms(result.get("schema_search_terms")),
             }
         except Exception:
-            return self._heuristic_route(question, page_context)
+            return self._heuristic_route(question, page_context, dashboard_context)
 
     @staticmethod
-    def _heuristic_route(question: str, page_context: dict[str, Any]) -> dict[str, Any]:
+    def _heuristic_route(
+        question: str,
+        page_context: dict[str, Any],
+        dashboard_context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         lowered = question.lower()
         db_markers = {
             "total",
@@ -64,10 +72,14 @@ class MasterOrchestratorAgent:
         }
         no_db_markers = ("what is", "define", "explain", "how does", "help me understand")
         needs_database = any(marker in lowered for marker in db_markers) and not lowered.startswith(no_db_markers)
+        viz_markers = ("chart", "graph", "plot", "trend", "compare", "over time", "visualize", "visualise", "visualization")
+        needs_visualization = needs_database and any(marker in lowered for marker in viz_markers)
         terms = extract_search_terms(question)
         terms.extend(extract_search_terms(_stringify_context(page_context)))
+        terms.extend(extract_search_terms(_stringify_context(dashboard_context or {})))
         return {
             "needs_database": needs_database,
+            "needs_visualization": needs_visualization,
             "route_reason": (
                 "The question appears to ask for KPI data from the warehouse."
                 if needs_database

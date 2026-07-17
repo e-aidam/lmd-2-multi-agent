@@ -21,7 +21,9 @@ Fill in `.env` with AWS Bedrock, Redshift, and Postgres memory settings. The che
 
 - `LMD_AWS_REGION` as a fallback for `AWS_REGION`
 - `LMD_AWS_ACCESS_KEY_ID` and `LMD_AWS_SECRET_ACCESS_KEY` as fallbacks for AWS credentials
-- `MODEL_ID` as a fallback for all `BEDROCK_MODEL_*` values
+- `MODEL_ID` as the default for the master orchestrator and final answer agents (higher-accuracy work)
+- `MODEL_ID_FAST` as the default for the SQL generator and SQL corrector agents (defaults to a Claude Haiku model, since SQL generation/correction is mechanical and benefits from lower latency/cost)
+- any explicit `BEDROCK_MODEL_MASTER` / `BEDROCK_MODEL_SQL` / `BEDROCK_MODEL_CORRECTOR` / `BEDROCK_MODEL_FINAL` overrides the corresponding per-agent default
 - `REDSHIFT_URI`, `DB_URI`, or `DATABASE_URL_READER` as a source for Redshift host/user/password
 - `MEM_DB_URI` for Postgres-backed chat memory
 
@@ -43,6 +45,50 @@ Additional structured endpoints:
 
 - `GET /health`
 - `POST /api/agent/query`
+
+### Dashboard (Power BI) context
+
+Both `POST /chat` and `POST /api/agent/query` accept a `page_context` payload describing what the
+user is looking at in the portal. To give the agent structural awareness of the current KPI
+dashboard, the frontend should include a `route` field set to the dashboard route slug:
+
+- `global-scale`, `ethiopia`, `liberia`, `malawi`, `sierra_leone`
+
+(`page`, `pathname`, or `path` — e.g. `/kpi-dashboard/malawi` — are also accepted; the last path
+segment is used.) On each request the backend resolves that slug through `DashboardContextService`
+(`app/services/dashboard_context.py`), which loads `app/data/dashboard_context.json` — a per-route
+summary of that dashboard's KPIs, theory-of-change levels, chart types, and filters. The resolved
+summary is attached to agent state at `state["context"]["dashboard_context"]` and passed to the
+Master Orchestrator and SQL Generator so they can bias schema search and SQL toward the country/KPIs
+the user is viewing. An unknown or absent route resolves to an empty summary (no behavior change).
+
+`app/data/dashboard_context.json` is sourced from the portal repo's KPI metadata; update it when the
+dashboards change.
+
+### Chart specs (dynamic visualization)
+
+When the Master Orchestrator decides a question wants a chart (`needs_visualization`), a
+`VisualizationAgent` (`app/agents/visualization_agent.py`) runs after the result formatter and turns
+the query rows into a minimal, frontend-renderable chart spec. `POST /api/agent/query` exposes it as
+`chart_spec` on the response (null when no chart is produced). The shape is intentionally small so the
+portal can map it to any charting library:
+
+```json
+{
+  "chart_type": "line",          // one of: "line", "bar", "pie"
+  "x_field": "fiscal_year",      // column name for the category/time axis
+  "y_field": "value",            // column name for the numeric measure
+  "series_field": null,           // optional column name to split into multiple series, or null
+  "title": "Training KPI trend over time"
+}
+```
+
+Notes:
+- `chart_spec` is only populated on the database-query path when `needs_visualization` is true;
+  otherwise it is null (a clean no-op).
+- If the rows can't be visualized (e.g. empty result or no numeric column), `chart_spec` is null and
+  `metadata.visualization_error` explains why — the rest of the response is unaffected.
+- `x_field`, `y_field`, and any `series_field` are always exact column names from the query result.
 
 ## Tests
 

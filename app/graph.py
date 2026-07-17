@@ -1,16 +1,18 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from app.agents.final_answer import FinalAnswerAgent
 from app.agents.master_orchestrator import MasterOrchestratorAgent
 from app.agents.sql_corrector import SQLCorrectorAgent
 from app.agents.sql_generator import SQLGeneratorAgent
+from app.agents.visualization_agent import VisualizationAgent
 from app.config import Settings, get_settings
 from app.models import AgentGraphResult
 from app.services.bedrock import BedrockService
 from app.services.chat_memory import ChatMemoryService
+from app.services.dashboard_context import DashboardContextService
 from app.services.redshift import RedshiftService, is_schema_error
 from app.services.result_formatter import format_query_result
 from app.services.retry_controller import RetryController
@@ -38,6 +40,8 @@ class AgentRuntime:
     sql_generator: SQLGeneratorAgent
     sql_corrector: SQLCorrectorAgent
     final_answer: FinalAnswerAgent
+    visualization: VisualizationAgent
+    dashboard_context: DashboardContextService = field(default_factory=DashboardContextService)
 
 
 def build_runtime(settings: Settings | None = None) -> AgentRuntime:
@@ -62,6 +66,8 @@ def build_runtime(settings: Settings | None = None) -> AgentRuntime:
         sql_generator=SQLGeneratorAgent(bedrock, settings),
         sql_corrector=SQLCorrectorAgent(bedrock, settings),
         final_answer=FinalAnswerAgent(bedrock, settings),
+        visualization=VisualizationAgent(bedrock, settings),
+        dashboard_context=DashboardContextService(),
     )
 
 
@@ -88,6 +94,7 @@ class KPIAnalyticsGraph:
         builder.add_node("retry_controller", self.retry_controller)
         builder.add_node("sql_corrector", self.sql_corrector)
         builder.add_node("result_formatter", self.result_formatter)
+        builder.add_node("visualization_agent", self.visualization_agent)
         builder.add_node("final_answer_agent", self.final_answer_agent)
         builder.add_node("final_error_response", self.final_error_response)
         builder.add_node("save_final_response", self.save_final_response)
@@ -124,7 +131,8 @@ class KPIAnalyticsGraph:
             {"correct": "sql_corrector", "error": "final_error_response"},
         )
         builder.add_edge("sql_corrector", "sql_validator")
-        builder.add_edge("result_formatter", "final_answer_agent")
+        builder.add_edge("result_formatter", "visualization_agent")
+        builder.add_edge("visualization_agent", "final_answer_agent")
         builder.add_edge("final_answer_agent", "save_final_response")
         builder.add_edge("final_error_response", "save_final_response")
         builder.add_edge("save_final_response", END)
@@ -180,12 +188,14 @@ class KPIAnalyticsGraph:
                 return state
 
             state.update(await self.result_formatter(state))
+            state.update(await self.visualization_agent(state))
             state.update(await self.final_answer_agent(state))
             state.update(await self.save_final_response(state))
             return state
 
     async def derive_session_id(self, state: AgentState) -> dict[str, Any]:
         context = state.get("context", {})
+        context = context if isinstance(context, dict) else {}
         page_context = context.get("page_context", {}) if isinstance(context, dict) else {}
         page_context_dict = page_context.get("dict") if isinstance(page_context, dict) else None
         session_id = None
@@ -193,11 +203,17 @@ class KPIAnalyticsGraph:
             session_id = page_context_dict.get("session_id")
         database = state.get("database") or self.runtime.settings.redshift_database
         user_id = state.get("user_id") or "anonymous"
+        # Attach the structural dashboard summary for the current portal route (if any) so the
+        # orchestrator and SQL generator understand what the user is likely looking at.
+        dashboard_context = self.runtime.dashboard_context.resolve(
+            page_context if isinstance(page_context, dict) else {}
+        )
         return {
             "session_id": session_id or f"{database}:{user_id}",
             "database": database,
             "retry_count": int(state.get("retry_count", 0) or 0),
             "max_sql_retries": self.runtime.settings.max_sql_retries,
+            "context": {**context, "dashboard_context": dashboard_context},
         }
 
     async def save_user_message(self, state: AgentState) -> dict[str, Any]:
@@ -222,13 +238,16 @@ class KPIAnalyticsGraph:
     async def master_orchestrator(self, state: AgentState) -> dict[str, Any]:
         context = state.get("context", {})
         page_context = context.get("page_context", {}) if isinstance(context, dict) else {}
+        dashboard_context = context.get("dashboard_context", {}) if isinstance(context, dict) else {}
         result = await self.runtime.master_orchestrator.route(
             question=state.get("question", ""),
             chat_history=state.get("chat_history", []),
             page_context=page_context,
+            dashboard_context=dashboard_context,
         )
         return {
             "needs_database": bool(result.get("needs_database")),
+            "needs_visualization": bool(result.get("needs_visualization")),
             "route_reason": result.get("route_reason", ""),
             "schema_search_terms": result.get("schema_search_terms", []),
         }
@@ -272,11 +291,13 @@ class KPIAnalyticsGraph:
     async def sql_generator(self, state: AgentState) -> dict[str, Any]:
         context = state.get("context", {})
         page_context = context.get("page_context", {}) if isinstance(context, dict) else {}
+        dashboard_context = context.get("dashboard_context", {}) if isinstance(context, dict) else {}
         result = await self.runtime.sql_generator.generate(
             question=state.get("question", ""),
             chat_history=state.get("chat_history", []),
             schema_context=state.get("schema_context", {}),
             page_context=page_context,
+            dashboard_context=dashboard_context,
         )
         sql = result.get("sql", "")
         if not sql:
@@ -347,6 +368,25 @@ class KPIAnalyticsGraph:
     async def result_formatter(self, state: AgentState) -> dict[str, Any]:
         return format_query_result(state.get("query_result"), max_preview_rows=20)
 
+    async def visualization_agent(self, state: AgentState) -> dict[str, Any]:
+        if not state.get("needs_visualization"):
+            # No-op passthrough: no chart requested, leave state untouched.
+            return {}
+        context = state.get("context", {})
+        context = context if isinstance(context, dict) else {}
+        page_context = context.get("page_context", {}) if isinstance(context, dict) else {}
+        dashboard_context = context.get("dashboard_context", {}) if isinstance(context, dict) else {}
+        result = await self.runtime.visualization.build_spec(
+            question=state.get("question", ""),
+            rows=state.get("query_result"),
+            page_context=page_context,
+            dashboard_context=dashboard_context,
+        )
+        return {
+            "chart_spec": result.get("chart_spec"),
+            "visualization_error": result.get("error"),
+        }
+
     async def final_answer_agent(self, state: AgentState) -> dict[str, Any]:
         answer = await self.runtime.final_answer.synthesize({**state, "ok": True})
         return {"ok": True, "final_answer": answer}
@@ -415,6 +455,7 @@ class KPIAnalyticsGraph:
             sql_used=state.get("validated_sql") or None,
             row_count=state.get("row_count"),
             preview_markdown=state.get("preview_markdown"),
+            chart_spec=state.get("chart_spec"),
             error=state.get("final_error") or state.get("query_error"),
             assumptions=state.get("sql_assumptions", []),
             metadata={
@@ -425,6 +466,8 @@ class KPIAnalyticsGraph:
                 "route_reason": state.get("route_reason"),
                 "schema_search_terms": state.get("schema_search_terms", []),
                 "correction_reason": state.get("correction_reason"),
+                "needs_visualization": state.get("needs_visualization", False),
+                "visualization_error": state.get("visualization_error"),
             },
         )
 

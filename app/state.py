@@ -15,6 +15,7 @@ class AgentState(TypedDict, total=False):
     memory_saved: bool
 
     needs_database: bool
+    needs_visualization: bool
     route_reason: str
 
     schema_context: dict[str, Any]
@@ -37,5 +38,7 @@ class AgentState(TypedDict, total=False):
     final_answer: str
     preview_markdown: str | None
     row_count: int | None
+    chart_spec: dict[str, Any] | None
+    visualization_error: str | None
     ok: bool
     final_error: str | None

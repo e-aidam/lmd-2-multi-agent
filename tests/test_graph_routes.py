@@ -77,12 +77,16 @@ class FakeRedshift:
 
 
 class FakeMaster:
-    def __init__(self, needs_database: bool) -> None:
+    def __init__(self, needs_database: bool, needs_visualization: bool = False) -> None:
         self.needs_database = needs_database
+        self.needs_visualization = needs_visualization
+        self.last_kwargs: dict[str, Any] = {}
 
-    async def route(self, **_: Any) -> dict[str, Any]:
+    async def route(self, **kwargs: Any) -> dict[str, Any]:
+        self.last_kwargs = kwargs
         return {
             "needs_database": self.needs_database,
+            "needs_visualization": self.needs_visualization,
             "route_reason": "route",
             "schema_search_terms": ["metrics"],
         }
@@ -91,9 +95,11 @@ class FakeMaster:
 class FakeGenerator:
     def __init__(self) -> None:
         self.calls = 0
+        self.last_kwargs: dict[str, Any] = {}
 
-    async def generate(self, **_: Any) -> dict[str, Any]:
+    async def generate(self, **kwargs: Any) -> dict[str, Any]:
         self.calls += 1
+        self.last_kwargs = kwargs
         return {"sql": "SELECT id FROM public.metrics", "assumptions": ["test"], "confidence": "high"}
 
 
@@ -111,9 +117,25 @@ class FakeFinalAnswer:
         return state.get("final_answer") or "## Answer\n\nok"
 
 
+class FakeVisualization:
+    def __init__(self, chart_spec: dict[str, Any] | None = None, error: str | None = None) -> None:
+        self.chart_spec = chart_spec
+        self.error = error
+        self.calls = 0
+        self.last_kwargs: dict[str, Any] = {}
+
+    async def build_spec(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls += 1
+        self.last_kwargs = kwargs
+        return {"chart_spec": self.chart_spec, "error": self.error}
+
+
 def build_graph(
     *,
     needs_database: bool,
+    needs_visualization: bool = False,
+    chart_spec: dict[str, Any] | None = None,
+    viz_error: str | None = None,
     redshift_results: list[QueryExecution] | None = None,
     max_retries: int = 1,
 ) -> tuple[KPIAnalyticsGraph, FakeSchemaCache, FakeRedshift, FakeGenerator, FakeCorrector, FakeMemory]:
@@ -130,20 +152,24 @@ def build_graph(
         redshift=redshift,  # type: ignore[arg-type]
         sql_validator=SQLValidator(SQLValidatorConfig(default_limit=100, max_limit=1000)),
         retry_controller=RetryController(max_retries),
-        master_orchestrator=FakeMaster(needs_database),  # type: ignore[arg-type]
+        master_orchestrator=FakeMaster(needs_database, needs_visualization),  # type: ignore[arg-type]
         sql_generator=generator,  # type: ignore[arg-type]
         sql_corrector=corrector,  # type: ignore[arg-type]
         final_answer=FakeFinalAnswer(),  # type: ignore[arg-type]
+        visualization=FakeVisualization(chart_spec, viz_error),  # type: ignore[arg-type]
     )
     return KPIAnalyticsGraph(runtime), schema_cache, redshift, generator, corrector, memory
 
 
-def initial_state() -> dict[str, Any]:
+def initial_state(route: str | None = None) -> dict[str, Any]:
+    page_dict: dict[str, Any] = {"session_id": "s1"}
+    if route is not None:
+        page_dict["route"] = route
     return {
         "question": "How many metrics?",
         "user_id": "u1",
         "database": "kpi_data",
-        "context": {"page_context": {"dict": {"session_id": "s1"}, "xml": "<ctx />"}},
+        "context": {"page_context": {"dict": page_dict, "xml": "<ctx />"}},
         "retry_count": 0,
     }
 
@@ -191,6 +217,104 @@ def test_corrector_runs_only_when_retry_controller_allows_it() -> None:
     assert corrector.calls == 1
     assert schema_cache.force_refreshes == 1
     assert state["retry_count"] == 1
+
+
+def test_dashboard_context_attached_to_state_and_passed_to_sql_generator() -> None:
+    # The runtime uses the real DashboardContextService (default), which loads the checked-in
+    # fixture, so a request tagged with the Malawi route resolves the Malawi dashboard summary.
+    graph, _, _, generator, _, _ = build_graph(needs_database=True)
+
+    state = asyncio.run(graph.ainvoke(initial_state(route="malawi")))
+
+    attached = state["context"]["dashboard_context"]
+    assert attached["program"] == "Malawi"
+    assert attached["route"] == "malawi"
+    # The SQL generator received the same Malawi dashboard context in its payload.
+    assert generator.last_kwargs["dashboard_context"]["program"] == "Malawi"
+
+
+def test_unknown_dashboard_route_resolves_to_empty_context() -> None:
+    graph, _, _, generator, _, _ = build_graph(needs_database=True)
+
+    state = asyncio.run(graph.ainvoke(initial_state(route="not-a-dashboard")))
+
+    assert state["context"]["dashboard_context"] == {}
+    assert generator.last_kwargs["dashboard_context"] == {}
+
+
+VALID_SPEC = {
+    "chart_type": "line",
+    "x_field": "fiscal_year",
+    "y_field": "value",
+    "series_field": None,
+    "title": "Training KPI trend over time",
+}
+
+
+def test_visualization_populates_chart_spec_on_langgraph_path() -> None:
+    graph, _, _, _, _, _ = build_graph(
+        needs_database=True,
+        needs_visualization=True,
+        chart_spec=VALID_SPEC,
+    )
+
+    state = asyncio.run(graph.ainvoke(initial_state()))
+
+    assert state["ok"] is True
+    assert state["needs_visualization"] is True
+    assert state["chart_spec"] == VALID_SPEC
+    assert graph.runtime.visualization.calls == 1
+    assert graph.result_from_state(state).chart_spec == VALID_SPEC
+
+
+def test_visualization_populates_chart_spec_on_fallback_path() -> None:
+    # Exercise the deterministic non-LangGraph path directly to prove parity.
+    graph, _, _, _, _, _ = build_graph(
+        needs_database=True,
+        needs_visualization=True,
+        chart_spec=VALID_SPEC,
+    )
+
+    state = asyncio.run(graph._run_fallback(initial_state()))
+
+    assert state["ok"] is True
+    assert state["chart_spec"] == VALID_SPEC
+    assert graph.runtime.visualization.calls == 1
+
+
+def test_visualization_is_noop_when_not_requested() -> None:
+    graph, _, _, _, _, _ = build_graph(
+        needs_database=True,
+        needs_visualization=False,
+        chart_spec=VALID_SPEC,  # would be returned if the node ran
+    )
+
+    state = asyncio.run(graph.ainvoke(initial_state()))
+
+    assert state["ok"] is True
+    assert graph.runtime.visualization.calls == 0
+    assert state.get("chart_spec") is None
+    assert graph.result_from_state(state).chart_spec is None
+
+
+def test_visualization_failure_is_graceful() -> None:
+    graph, _, _, _, _, _ = build_graph(
+        needs_database=True,
+        needs_visualization=True,
+        chart_spec=None,
+        viz_error="No rows available to visualize.",
+    )
+
+    state = asyncio.run(graph.ainvoke(initial_state()))
+
+    # A failed visualization must not break the overall response.
+    assert state["ok"] is True
+    assert state["chart_spec"] is None
+    assert state["visualization_error"] == "No rows available to visualize."
+    result = graph.result_from_state(state)
+    assert result.ok is True
+    assert result.chart_spec is None
+    assert result.metadata["visualization_error"] == "No rows available to visualize."
 
 
 def test_final_error_after_retry_exhaustion() -> None:

@@ -14,6 +14,7 @@ from tests.test_graph_routes import (
     FakeMemory,
     FakeRedshift,
     FakeSchemaCache,
+    FakeVisualization,
 )
 
 
@@ -29,6 +30,7 @@ def test_derive_session_id_uses_page_context_session_id() -> None:
         sql_generator=FakeGenerator(),  # type: ignore[arg-type]
         sql_corrector=FakeCorrector(),  # type: ignore[arg-type]
         final_answer=FakeFinalAnswer(),  # type: ignore[arg-type]
+        visualization=FakeVisualization(),  # type: ignore[arg-type]
     )
     graph = KPIAnalyticsGraph(runtime)
 
@@ -57,6 +59,7 @@ def test_derive_session_id_falls_back_to_database_and_user() -> None:
         sql_generator=FakeGenerator(),  # type: ignore[arg-type]
         sql_corrector=FakeCorrector(),  # type: ignore[arg-type]
         final_answer=FakeFinalAnswer(),  # type: ignore[arg-type]
+        visualization=FakeVisualization(),  # type: ignore[arg-type]
     )
     graph = KPIAnalyticsGraph(runtime)
 

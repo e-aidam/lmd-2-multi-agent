@@ -1,0 +1,214 @@
+{
+  "_comment": "Structured summary of each KPI dashboard route in the LMD portal (Next.js repo lmd-portal-UI, src/app/(protected)/kpi-dashboard/<route>/page.tsx). KPI/indicator names and theory-of-change levels are sourced from that repo's kpi-metadata.json. The dashboards embed Power BI reports, so the exact chart_types live inside Power BI and are approximate here. Keyed by route slug; update when dashboards change.",
+  "_source": "lmd-portal-UI/src/app/(protected)/kpi-dashboard/kpi-data-tables/_components/kpi-metadata.json",
+  "global-scale": {
+    "route": "global-scale",
+    "title": "Global Scale KPI Dashboard",
+    "program": "Global",
+    "country": null,
+    "scope": "All country programs aggregated organization-wide",
+    "theory_of_change_levels": [
+      "Cross Cutting"
+    ],
+    "kpis_by_level": {
+      "Cross Cutting": [
+        "Number of community and frontline health workers supported by Last Mile Health and its government partners to provide quality community-based primary healthcare services",
+        "Population of the communities with improved access to quality, community-based primary healthcare through Last Mile Health and its government partners",
+        "Number of women of reproductive age with improved access to modern family planning services through LMH-supported CHWs",
+        "Number of under-five children’s lives saved by CHWs supported by LMH (modeled estimates)"
+      ]
+    },
+    "filters": [
+      "country/program",
+      "fiscal_year (FY24-FY28)",
+      "quarter (Q1-Q4)",
+      "theory_of_change_level"
+    ],
+    "chart_types": [
+      "Actuals-vs-target trend by fiscal year and quarter (Power BI line/column visuals)",
+      "KPI summary/scorecard cards",
+      "Bar and line charts grouped by theory-of-change level"
+    ],
+    "powerbi_embed_url": "https://app.powerbi.com/view?r=eyJrIjoiOTBjZmI5ZmQtYzBlYi00MWVjLWIyNDctMDA4MGIzM2QzNDk4IiwidCI6ImMwZGEzYWQxLWNlMjUtNGUyZi05OTBjLWJjMzE1NzUwY2VkNCIsImMiOjN9"
+  },
+  "ethiopia": {
+    "route": "ethiopia",
+    "title": "Ethiopia KPI Dashboard",
+    "program": "Ethiopia",
+    "country": "Ethiopia",
+    "scope": "Ethiopia country program",
+    "theory_of_change_levels": [
+      "Cross Cutting",
+      "Strengthen",
+      "Upskill",
+      "Deliver"
+    ],
+    "kpis_by_level": {
+      "Cross Cutting": [
+        "Number of community and frontline health workers supported by Last Mile Health and its government partners to provide quality community-based primary healthcare services",
+        "Population of the communities with improved access to quality, community-based primary healthcare through Last Mile Health and its government partners"
+      ],
+      "Strengthen": [
+        "Ethiopia MOH institutionalizes LMH's blended learning approach for HEW integrated refresher training"
+      ],
+      "Upskill": [
+        "Number of community and frontline health workers who have completed a full blended learning training module",
+        "Total number of blended training module completions by community and frontline health workers",
+        "Percentage of HEWs and HEW Supervisors who have received a passing score in a post-training knowledge assessment",
+        "Percentage of HEWs and HEW Supervisors who have received a passing score in a post-training skills assessment"
+      ],
+      "Deliver": [
+        "Number of near vision eyeglasses distributed by HEWs",
+        "Number of HEWs who have utilized AI-powered decision support (HEP Assist)"
+      ]
+    },
+    "filters": [
+      "country/program",
+      "fiscal_year (FY24-FY28)",
+      "quarter (Q1-Q4)",
+      "theory_of_change_level"
+    ],
+    "chart_types": [
+      "Actuals-vs-target trend by fiscal year and quarter (Power BI line/column visuals)",
+      "KPI summary/scorecard cards",
+      "Bar and line charts grouped by theory-of-change level"
+    ],
+    "powerbi_embed_url": "https://app.powerbi.com/view?r=eyJrIjoiYzZjZmRkMmItODM5OS00Nzc4LWFhZTktNDQ1MmI4YjdiNzFkIiwidCI6ImMwZGEzYWQxLWNlMjUtNGUyZi05OTBjLWJjMzE1NzUwY2VkNCIsImMiOjN9"
+  },
+  "liberia": {
+    "route": "liberia",
+    "title": "Liberia KPI Dashboard",
+    "program": "Liberia",
+    "country": "Liberia",
+    "scope": "Liberia country program",
+    "theory_of_change_levels": [
+      "Cross Cutting",
+      "Strengthen",
+      "Upskill",
+      "Deliver"
+    ],
+    "kpis_by_level": {
+      "Cross Cutting": [
+        "Number of community and frontline health workers supported by Last Mile Health and its government partners to provide quality community-based primary healthcare services",
+        "Population of the communities with improved access to quality, community-based primary healthcare through Last Mile Health and its government partners"
+      ],
+      "Strengthen": [
+        "Community health system strengthened through technical advisory investments in leadership, governance, and management",
+        "Fidelity to National Community Health Policy",
+        "Percent of counties with current secured financial investments for the NCHP for the next six months",
+        "Number of CHAs who have received eCBIS training and equipment",
+        "Percentage of eCBIS-trained CHAs who have submitted at least one digital report in the previous calendar month",
+        "Total number of treatments delivered annually for malaria, diarrhea, and ARI by CHAs in children under 5 years nationally",
+        "Number of routine/home visits provided nationally"
+      ],
+      "Upskill": [
+        "Number of unique CHAs who have been trained in the iCCM module of the revised competency-based NCHP curriculum",
+        "Percentage of CHAs who have received a passing score on the post-training assessment for iCCM"
+      ],
+      "Deliver": [
+        "Number of malaria treatments delivered by CHAs to children <5 years",
+        "Number of diarrhea treatments delivered by CHAs to children <5 years",
+        "Number of pneumonia treatments delivered by CHAs to children <5 years",
+        "Percent of births that occurred in a health facility",
+        "Percentage of newly recruited CHAs in LMH managed network who are female",
+        "Percentage of LMH-managed CHSSs who have submitted at least one digital report into DHIS2 in the previous calendar month"
+      ]
+    },
+    "filters": [
+      "country/program",
+      "fiscal_year (FY24-FY28)",
+      "quarter (Q1-Q4)",
+      "theory_of_change_level"
+    ],
+    "chart_types": [
+      "Actuals-vs-target trend by fiscal year and quarter (Power BI line/column visuals)",
+      "KPI summary/scorecard cards",
+      "Bar and line charts grouped by theory-of-change level"
+    ],
+    "powerbi_embed_url": "https://app.powerbi.com/view?r=eyJrIjoiNzQyNGU5NDktYjBjNi00YWU3LTg0ODgtYzU2OTg5MTM1NGVjIiwidCI6ImMwZGEzYWQxLWNlMjUtNGUyZi05OTBjLWJjMzE1NzUwY2VkNCIsImMiOjN9"
+  },
+  "malawi": {
+    "route": "malawi",
+    "title": "Malawi KPI Dashboard",
+    "program": "Malawi",
+    "country": "Malawi",
+    "scope": "Malawi country program",
+    "theory_of_change_levels": [
+      "Cross Cutting",
+      "Strengthen",
+      "Upskill"
+    ],
+    "kpis_by_level": {
+      "Cross Cutting": [
+        "Number of community and frontline health workers supported by Last Mile Health and its government partners to provide quality community-based primary healthcare services",
+        "Population of the communities with improved access to quality, community-based primary healthcare through Last Mile Health and its government partners"
+      ],
+      "Strengthen": [
+        "LMH supports MOH in developing and deploying a digital Integrated Community Health Information System (iCHIS)",
+        "Number of HSAs/SHSAs who have been oriented to iCHIS and received at least one iCHIS module",
+        "Percentage of trained HSAs/SHSAs who have reported data into iCHIS during the quarter",
+        "Percentage of HSAs/SHSAs in LMH-supported districts who have received quarterly iCHIS supervision visits"
+      ],
+      "Upskill": [
+        "Number of CHWs who have completed a full training module on the HBP components",
+        "Percentage of CHWs who have received a passing score in a post-training knowledge assessment",
+        "Percentage of CHWs who have received a passing score in a post-training skills assessment"
+      ]
+    },
+    "filters": [
+      "country/program",
+      "fiscal_year (FY24-FY28)",
+      "quarter (Q1-Q4)",
+      "theory_of_change_level"
+    ],
+    "chart_types": [
+      "Actuals-vs-target trend by fiscal year and quarter (Power BI line/column visuals)",
+      "KPI summary/scorecard cards",
+      "Bar and line charts grouped by theory-of-change level"
+    ],
+    "powerbi_embed_url": "https://app.powerbi.com/view?r=eyJrIjoiZDUxNmM3ZjQtZDBlZC00MjhjLWJlMWMtMWVjM2U2Y2M1NTBmIiwidCI6ImMwZGEzYWQxLWNlMjUtNGUyZi05OTBjLWJjMzE1NzUwY2VkNCIsImMiOjN9"
+  },
+  "sierra_leone": {
+    "route": "sierra_leone",
+    "title": "Sierra Leone KPI Dashboard",
+    "program": "Sierra Leone",
+    "country": "Sierra Leone",
+    "scope": "Sierra Leone country program",
+    "theory_of_change_levels": [
+      "Cross Cutting",
+      "Strengthen",
+      "Upskill",
+      "Deliver"
+    ],
+    "kpis_by_level": {
+      "Cross Cutting": [
+        "Number of community and frontline health workers supported by Last Mile Health and its government partners to provide quality community-based primary healthcare services",
+        "Population of the communities with improved access to quality, community-based primary healthcare through Last Mile Health and its government partners"
+      ],
+      "Strengthen": [
+        "Community health system strengthened through technical advisory investments in leadership, governance, and management",
+        "Percentage of NCHWP quality improvements identified during the district quarterly review meeting that have been completed"
+      ],
+      "Upskill": [
+        "Number of CHWs who have completed a full training module on the HBP components",
+        "Percentage of CHWs who have received a passing score in a post-training knowledge assessment",
+        "Percentage of CHWs who have received a passing score in a post-training skills assessment"
+      ],
+      "Deliver": [
+        "Percentage of actions implemented from prior CHW supervision visits (LMH-supported districts only)"
+      ]
+    },
+    "filters": [
+      "country/program",
+      "fiscal_year (FY24-FY28)",
+      "quarter (Q1-Q4)",
+      "theory_of_change_level"
+    ],
+    "chart_types": [
+      "Actuals-vs-target trend by fiscal year and quarter (Power BI line/column visuals)",
+      "KPI summary/scorecard cards",
+      "Bar and line charts grouped by theory-of-change level"
+    ],
+    "powerbi_embed_url": "https://app.powerbi.com/view?r=eyJrIjoiMzNmMjM1OTItNWRiMS00ZmI0LTkzNTMtZWUxY2FiODM3OTA4IiwidCI6ImMwZGEzYWQxLWNlMjUtNGUyZi05OTBjLWJjMzE1NzUwY2VkNCIsImMiOjN9"
+  }
+}
