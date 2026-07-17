@@ -65,6 +65,31 @@ the user is viewing. An unknown or absent route resolves to an empty summary (no
 `app/data/dashboard_context.json` is sourced from the portal repo's KPI metadata; update it when the
 dashboards change.
 
+### Chart specs (dynamic visualization)
+
+When the Master Orchestrator decides a question wants a chart (`needs_visualization`), a
+`VisualizationAgent` (`app/agents/visualization_agent.py`) runs after the result formatter and turns
+the query rows into a minimal, frontend-renderable chart spec. `POST /api/agent/query` exposes it as
+`chart_spec` on the response (null when no chart is produced). The shape is intentionally small so the
+portal can map it to any charting library:
+
+```json
+{
+  "chart_type": "line",          // one of: "line", "bar", "pie"
+  "x_field": "fiscal_year",      // column name for the category/time axis
+  "y_field": "value",            // column name for the numeric measure
+  "series_field": null,           // optional column name to split into multiple series, or null
+  "title": "Training KPI trend over time"
+}
+```
+
+Notes:
+- `chart_spec` is only populated on the database-query path when `needs_visualization` is true;
+  otherwise it is null (a clean no-op).
+- If the rows can't be visualized (e.g. empty result or no numeric column), `chart_spec` is null and
+  `metadata.visualization_error` explains why — the rest of the response is unaffected.
+- `x_field`, `y_field`, and any `series_field` are always exact column names from the query result.
+
 ## Tests
 
 ```bash

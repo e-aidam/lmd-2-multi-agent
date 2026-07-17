@@ -59,6 +59,7 @@ class AgentGraphResult(BaseModel):
     sql_used: str | None = None
     row_count: int | None = None
     preview_markdown: str | None = None
+    chart_spec: dict[str, Any] | None = None
     error: str | None = None
     assumptions: list[str] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)

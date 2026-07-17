@@ -101,6 +101,7 @@ class Settings:
     bedrock_model_sql: str | None = None
     bedrock_model_corrector: str | None = None
     bedrock_model_final: str | None = None
+    bedrock_model_visualization: str | None = None
 
     redshift_host: str | None = None
     redshift_port: int = 5439
@@ -136,6 +137,8 @@ class Settings:
             bedrock_model_sql=_getenv("BEDROCK_MODEL_SQL", fast_default),
             bedrock_model_corrector=_getenv("BEDROCK_MODEL_CORRECTOR", fast_default),
             bedrock_model_final=_getenv("BEDROCK_MODEL_FINAL", strong_default),
+            # Building a chart spec from result rows is a structured transform → fast default.
+            bedrock_model_visualization=_getenv("BEDROCK_MODEL_VISUALIZATION", fast_default),
             redshift_host=_getenv("REDSHIFT_HOST", redshift_uri_values.get("host")),
             redshift_port=_get_int("REDSHIFT_PORT", int(redshift_uri_values.get("port") or 5439), 1),
             redshift_database=_getenv("REDSHIFT_DATABASE", "kpi_data") or "kpi_data",

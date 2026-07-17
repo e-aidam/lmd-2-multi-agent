@@ -155,6 +155,80 @@ def test_real_graph_uses_env_parsed_runtime_for_database_queries(monkeypatch: py
     }
 
 
+def test_real_graph_produces_chart_spec_for_visualization_request(monkeypatch: pytest.MonkeyPatch) -> None:
+    _configure_env(monkeypatch)
+
+    async def fake_generate_json(self: BedrockService, model_id: str | None, _: str, payload: dict[str, object]) -> dict[str, object]:
+        if "columns" in payload:  # visualization agent
+            return {
+                "chart_type": "line",
+                "x_field": "fiscal_year",
+                "y_field": "value",
+                "series_field": None,
+                "title": "Training KPI trend",
+            }
+        if "schema_context" in payload:  # sql generator
+            return {
+                "sql": "SELECT fiscal_year, value FROM public.training_kpi",
+                "assumptions": ["viz"],
+                "confidence": "high",
+            }
+        # master orchestrator: chart-worthy database question
+        return {
+            "needs_database": True,
+            "needs_visualization": True,
+            "route_reason": "Trend chart requested.",
+            "schema_search_terms": ["training", "malawi"],
+        }
+
+    async def fake_generate_text(self: BedrockService, model_id: str | None, _: str, user_text: str) -> str:
+        return "## Answer\n\n## Chart\n\nShowing a line chart of the training KPI trend."
+
+    async def fake_load_full_schema(self: RedshiftService, database: str, schema_name: str | None = None) -> dict[str, object]:
+        return {
+            "tables": [
+                {
+                    "table_schema": "public",
+                    "table_name": "training_kpi",
+                    "columns": [
+                        {"column_name": "fiscal_year", "data_type": "varchar", "ordinal_position": 1},
+                        {"column_name": "value", "data_type": "integer", "ordinal_position": 2},
+                    ],
+                }
+            ]
+        }
+
+    async def fake_execute_sql(self: RedshiftService, sql: str) -> QueryExecution:
+        return QueryExecution(
+            rows=[{"fiscal_year": "FY24", "value": 10}, {"fiscal_year": "FY25", "value": 20}],
+            error=None,
+        )
+
+    monkeypatch.setattr(BedrockService, "generate_json", fake_generate_json)
+    monkeypatch.setattr(BedrockService, "generate_text", fake_generate_text)
+    monkeypatch.setattr(RedshiftService, "load_full_schema", fake_load_full_schema)
+    monkeypatch.setattr(RedshiftService, "execute_sql", fake_execute_sql)
+
+    result = asyncio.run(
+        run_agent_structured(
+            "u1",
+            "show the training KPI trend for Malawi over time",
+            {"dict": {"route": "malawi", "session_id": "portal-session"}, "xml": "<ctx />"},
+            "kpi_data",
+        )
+    )
+
+    assert result.ok is True
+    assert result.metadata["needs_visualization"] is True
+    assert result.chart_spec == {
+        "chart_type": "line",
+        "x_field": "fiscal_year",
+        "y_field": "value",
+        "series_field": None,
+        "title": "Training KPI trend",
+    }
+
+
 def test_real_graph_uses_env_limits_during_retry_and_correction(monkeypatch: pytest.MonkeyPatch) -> None:
     _configure_env(
         monkeypatch,
