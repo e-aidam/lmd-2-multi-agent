@@ -21,7 +21,9 @@ Fill in `.env` with AWS Bedrock, Redshift, and Postgres memory settings. The che
 
 - `LMD_AWS_REGION` as a fallback for `AWS_REGION`
 - `LMD_AWS_ACCESS_KEY_ID` and `LMD_AWS_SECRET_ACCESS_KEY` as fallbacks for AWS credentials
-- `MODEL_ID` as a fallback for all `BEDROCK_MODEL_*` values
+- `MODEL_ID` as the default for the master orchestrator and final answer agents (higher-accuracy work)
+- `MODEL_ID_FAST` as the default for the SQL generator and SQL corrector agents (defaults to a Claude Haiku model, since SQL generation/correction is mechanical and benefits from lower latency/cost)
+- any explicit `BEDROCK_MODEL_MASTER` / `BEDROCK_MODEL_SQL` / `BEDROCK_MODEL_CORRECTOR` / `BEDROCK_MODEL_FINAL` overrides the corresponding per-agent default
 - `REDSHIFT_URI`, `DB_URI`, or `DATABASE_URL_READER` as a source for Redshift host/user/password
 - `MEM_DB_URI` for Postgres-backed chat memory
 

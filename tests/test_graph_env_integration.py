@@ -3,7 +3,7 @@ import asyncio
 import pytest
 
 from agent import run_agent_structured
-from app.config import get_settings, set_settings_for_tests
+from app.config import DEFAULT_FAST_MODEL_ID, get_settings, set_settings_for_tests
 from app.graph import set_default_graph_for_tests
 from app.services.bedrock import BedrockService
 from app.services.redshift import QueryExecution, RedshiftService
@@ -144,7 +144,8 @@ def test_real_graph_uses_env_parsed_runtime_for_database_queries(monkeypatch: py
     assert result.row_count == 1
     assert result.metadata["session_id"] == "portal-session"
     assert result.metadata["max_sql_retries"] == 1
-    assert captured["models"] == ["model-from-env", "model-from-env"]
+    # Master orchestrator inherits MODEL_ID; the SQL generator defaults to the fast Haiku model.
+    assert captured["models"] == ["model-from-env", DEFAULT_FAST_MODEL_ID]
     assert captured["schema_tables"] == ["metrics"]
     assert captured["database_rules"] == {
         "database": "kpi_data",
@@ -168,19 +169,24 @@ def test_real_graph_uses_env_limits_during_retry_and_correction(monkeypatch: pyt
     }
 
     async def fake_generate_json(self: BedrockService, model_id: str | None, _: str, payload: dict[str, object]) -> dict[str, object]:
-        assert model_id == "model-from-env"
         if "failed_sql" in payload:
+            # SQL corrector defaults to the fast Haiku model.
+            assert model_id == DEFAULT_FAST_MODEL_ID
             captured["corrector_seen"] = True
             return {
                 "corrected_sql": "SELECT metric_name FROM public.metrics LIMIT 99",
                 "correction_reason": "Fixed bad column reference.",
             }
         if "schema_context" in payload:
+            # SQL generator defaults to the fast Haiku model.
+            assert model_id == DEFAULT_FAST_MODEL_ID
             return {
                 "sql": "SELECT missing_column FROM public.metrics",
                 "assumptions": ["integration"],
                 "confidence": "medium",
             }
+        # Master orchestrator keeps the stronger MODEL_ID.
+        assert model_id == "model-from-env"
         return {
             "needs_database": True,
             "route_reason": "Database query required.",

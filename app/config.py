@@ -10,6 +10,12 @@ class SettingsError(RuntimeError):
     """Raised when runtime settings are invalid for the selected environment."""
 
 
+# Strong, higher-accuracy default for routing and final-response synthesis.
+DEFAULT_STRONG_MODEL_ID = "us.anthropic.claude-sonnet-4-20250514-v1:0"
+# Faster/cheaper default for the mechanical, structured SQL generation/correction work.
+DEFAULT_FAST_MODEL_ID = "us.anthropic.claude-3-5-haiku-20241022-v1:0"
+
+
 def _load_dotenv_if_available() -> None:
     try:
         from dotenv import load_dotenv
@@ -120,13 +126,16 @@ class Settings:
         _load_dotenv_if_available()
         _promote_aws_aliases()
         redshift_uri_values = _parse_database_uri(_getenv_any(("REDSHIFT_URI", "DB_URI", "DATABASE_URL_READER")))
-        model_default = _getenv("MODEL_ID", "us.anthropic.claude-sonnet-4-20250514-v1:0")
+        # Master routing and final-answer synthesis default to the stronger model (MODEL_ID);
+        # SQL generation and correction default to a faster/cheaper Haiku model (MODEL_ID_FAST).
+        strong_default = _getenv("MODEL_ID", DEFAULT_STRONG_MODEL_ID)
+        fast_default = _getenv("MODEL_ID_FAST", DEFAULT_FAST_MODEL_ID)
         settings = cls(
             aws_region=_getenv_any(("AWS_REGION", "LMD_AWS_REGION"), "us-east-1") or "us-east-1",
-            bedrock_model_master=_getenv("BEDROCK_MODEL_MASTER", model_default),
-            bedrock_model_sql=_getenv("BEDROCK_MODEL_SQL", model_default),
-            bedrock_model_corrector=_getenv("BEDROCK_MODEL_CORRECTOR", model_default),
-            bedrock_model_final=_getenv("BEDROCK_MODEL_FINAL", model_default),
+            bedrock_model_master=_getenv("BEDROCK_MODEL_MASTER", strong_default),
+            bedrock_model_sql=_getenv("BEDROCK_MODEL_SQL", fast_default),
+            bedrock_model_corrector=_getenv("BEDROCK_MODEL_CORRECTOR", fast_default),
+            bedrock_model_final=_getenv("BEDROCK_MODEL_FINAL", strong_default),
             redshift_host=_getenv("REDSHIFT_HOST", redshift_uri_values.get("host")),
             redshift_port=_get_int("REDSHIFT_PORT", int(redshift_uri_values.get("port") or 5439), 1),
             redshift_database=_getenv("REDSHIFT_DATABASE", "kpi_data") or "kpi_data",
